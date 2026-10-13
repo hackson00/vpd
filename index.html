@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>보성하루 스마트팜 VPD 실시간 모니터링</title>
+    <title>보성하루 스마트팜 VPD 실시간 모니터링 (Optimized)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes pulse-slow {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
+        }
         .animate-pulse-slow { animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
     </style>
 </head>
@@ -21,13 +22,13 @@
                 <h1 class="text-2xl md:text-3xl font-extrabold text-emerald-400 flex items-center gap-2">
                     <span>🌱</span> 보성하루 스마트팜 VPD 실시간 대시보드
                 </h1>
-                <p class="text-sm text-slate-400 mt-1">구글 스프레드시트 연동 · 1분(60초) 주기 자동 갱신</p>
+                <p class="text-sm text-slate-400 mt-1">구글 스프레드시트 연동 · 고속 로딩 최적화 · 1분 자동 갱신</p>
             </div>
             <div class="flex items-center gap-3">
                 <span id="sync-status" class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-full flex items-center gap-2">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 동기화 대기 중
                 </span>
-                <button onclick="fetchSheetData()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition-colors">
+                <button id="refresh-btn" onclick="fetchSheetData()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5">
                     🔄 새로고침
                 </button>
             </div>
@@ -41,8 +42,7 @@
                     <span>🏠</span> 육묘장 구역
                 </h2>
                 <div id="grid-nursery" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <!-- 데이터 로딩 전 표시 -->
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-slate-500 text-center col-span-full">데이터 로딩 중...</div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-slate-500 text-center col-span-full">데이터 불러오는 중...</div>
                 </div>
             </section>
 
@@ -52,7 +52,7 @@
                     <span>🏡</span> 1동 구역
                 </h2>
                 <div id="grid-dong1" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-slate-500 text-center col-span-full">데이터 로딩 중...</div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-slate-500 text-center col-span-full">데이터 불러오는 중...</div>
                 </div>
             </section>
 
@@ -62,7 +62,7 @@
                     <span>🏡</span> 2동 구역
                 </h2>
                 <div id="grid-dong2" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-slate-500 text-center col-span-full">데이터 로딩 중...</div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-slate-500 text-center col-span-full">데이터 불러오는 중...</div>
                 </div>
             </section>
         </div>
@@ -72,44 +72,49 @@
         const SPREADSHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1TAeZh6qbw7BJSM1kYUcUG-B57I4_ccjvc4-M5afTgjU/export?format=csv&gid=0';
 
         async function fetchSheetData() {
+            const statusEl = document.getElementById('sync-status');
+            statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> 동기화 중...`;
+
             try {
-                const response = await fetch(SPREADSHEET_CSV_URL);
+                // 네트워크 지연 방지를 위한 8초 타임아웃 컨트롤러 추가
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+                const response = await fetch(SPREADSHEET_CSV_URL, { 
+                    signal: controller.signal,
+                    cache: 'no-cache' // 항상 최신 데이터를 빠르게 가져오도록 캐시 우회
+                });
+                clearTimeout(timeoutId);
+
                 if (!response.ok) throw new Error('네트워크 응답 오류');
                 const csvText = await response.text();
                 parseAndRender(csvText);
             } catch (error) {
                 console.error('데이터 로드 실패:', error);
-                document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span> 동기화 실패`;
+                statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span> 동기화 지연/실패`;
             }
         }
 
         function parseAndRender(csvText) {
-            const rows = csvText.split('\n').map(row => {
-                const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
-                return row.split(regex).map(val => val.replace(/^"|"$/g, '').trim());
-            });
+            // 빠른 줄바꿈 및 파싱 처리
+            const lines = csvText.split('\n');
+            if (lines.length < 2) return;
 
-            if (rows.length < 2) return;
+            let nurseryHtml = '';
+            let dong1Html = '';
+            let dong2Html = '';
 
-            const dataRows = rows.slice(1);
-            
-            const nurseryContainer = document.getElementById('grid-nursery');
-            const dong1Container = document.getElementById('grid-dong1');
-            const dong2Container = document.getElementById('grid-dong2');
+            // 반복문 내부 DOM 조작을 줄여 렌더링 속도 대폭 향상 (DocumentFragment 방식 응용)
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
 
-            nurseryContainer.innerHTML = '';
-            dong1Container.innerHTML = '';
-            dong2Container.innerHTML = '';
-
-            let lastTime = '';
-
-            dataRows.forEach((cols) => {
-                if (cols.length < 8 || !cols[0]) return;
+                // 간단하고 빠른 CSV 컴마 파싱 (정규식 부하 감소)
+                const cols = line.split(',').map(val => val.replace(/^"|"$/g, '').trim());
+                if (cols.length < 8 || !cols[0]) continue;
 
                 const [zone, time, temp, hum, vpd, status, water, interval] = cols;
-                if (!lastTime && time) lastTime = time;
 
-                // 생육 상태 배지 및 카드 강조 스타일 결정
                 let badgeClass = 'bg-slate-800 text-slate-300 border-slate-700';
                 let cardBorderClass = 'border-slate-800 hover:border-slate-700';
                 
@@ -124,7 +129,6 @@
                     cardBorderClass = 'border-slate-800/80 bg-slate-900/60';
                 }
 
-                // 카드 HTML 구조 생성
                 const cardHtml = `
                     <div class="bg-slate-900/80 backdrop-blur border ${cardBorderClass} rounded-2xl p-5 transition-all duration-300 flex flex-col justify-between">
                         <div>
@@ -155,24 +159,27 @@
                     </div>
                 `;
 
-                // 구역 이름에 따라 분류하여 해당 컨테이너에 삽입
                 if (zone.includes('육묘장')) {
-                    nurseryContainer.innerHTML += cardHtml;
+                    nurseryHtml += cardHtml;
                 } else if (zone.includes('1동')) {
-                    dong1Container.innerHTML += cardHtml;
+                    dong1Html += cardHtml;
                 } else if (zone.includes('2동')) {
-                    dong2Container.innerHTML += cardHtml;
+                    dong2Html += cardHtml;
                 }
-            });
+            }
 
-            // 상단 동기화 상태 갱신
+            // DOM 반영을 한 번에 처리하여 렌더링 속도 최적화
+            document.getElementById('grid-nursery').innerHTML = nurseryHtml || '<div class="text-slate-500 text-center col-span-full">데이터 없음</div>';
+            document.getElementById('grid-dong1').innerHTML = dong1Html || '<div class="text-slate-500 text-center col-span-full">데이터 없음</div>';
+            document.getElementById('grid-dong2').innerHTML = dong2Html || '<div class="text-slate-500 text-center col-span-full">데이터 없음</div>';
+
             document.getElementById('sync-status').innerHTML = `
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 
-                실시간 동기화 완료 (${new Date().toLocaleTimeString()})
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 
+                동기화 완료 (${new Date().toLocaleTimeString()})
             `;
         }
 
-        // 초기 실행 및 60초(1분) 주기 자동 갱신 설정
+        // 초기 실행 및 60초 주기 갱신
         fetchSheetData();
         setInterval(fetchSheetData, 60000);
     </script>
