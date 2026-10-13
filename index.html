@@ -3,121 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>보성하루 육묘장 & 스마트팜 VPD 실시간 모니터링</title>
+    <title>보성하루 스마트팜 VPD 실시간 모니터링</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <meta http-equiv="refresh" content="60"> <!-- 60초마다 자동 새로고침 -->
+    <style>
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        .animate-pulse-slow { animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-4 md:p-8">
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8 font-sans">
     <div class="max-w-7xl mx-auto">
         <!-- 헤더 -->
-        <header class="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-slate-800 pb-4">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-800 pb-6 gap-4">
             <div>
-                <h1 class="text-2xl md:text-3xl font-bold text-emerald-400">🌱 보성하루 스마트팜 VPD 실시간 현황</h1>
-                <p class="text-sm text-slate-400 mt-1">구글 스프레드시트 연동 대시보드 (60초 주기 자동 갱신)</p>
+                <h1 class="text-2xl md:text-3xl font-extrabold text-emerald-400 flex items-center gap-2">
+                    <span>🌱</span> 보성하루 스마트팜 VPD 실시간 대시보드
+                </h1>
+                <p class="text-sm text-slate-400 mt-1">구글 스프레드시트 연동 · 1분(60초) 주기 자동 갱신</p>
             </div>
-            <div class="mt-4 md:mt-0 text-right">
-                <span id="last-update" class="text-xs bg-slate-800 px-3 py-1.5 rounded-full text-slate-300">데이터 로딩 중...</span>
+            <div class="flex items-center gap-3">
+                <span id="sync-status" class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-full flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 동기화 대기 중
+                </span>
+                <button onclick="fetchSheetData()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition-colors">
+                    🔄 새로고침
+                </button>
             </div>
         </header>
 
-        <!-- 데이터 테이블 카드 -->
-        <div class="bg-slate-800/50 rounded-2xl border border-slate-700/60 overflow-hidden shadow-xl backdrop-blur-md">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-slate-800 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-700">
-                            <th class="p-4 font-semibold">구역 구분</th>
-                            <th class="p-4 font-semibold">조회 시간</th>
-                            <th class="p-4 font-semibold">온도 (°C)</th>
-                            <th class="p-4 font-semibold">습도 (%)</th>
-                            <th class="p-4 font-semibold">VPD (kPa)</th>
-                            <th class="p-4 font-semibold">생육 상태</th>
-                            <th class="p-4 font-semibold">추천 관수량</th>
-                            <th class="p-4 font-semibold">관수 인터벌</th>
-                        </tr>
-                    </thead>
-                    <tbody id="data-table-body" class="divide-y divide-slate-700/50 text-sm">
-                        <tr>
-                            <td colspan="8" class="p-8 text-center text-slate-400">데이터를 불러오는 중입니다...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+        <!-- 구역별 컨테이너 (육묘장 / 1동 / 2동) -->
+        <div class="space-y-8">
+            <!-- 육묘장 구역 -->
+            <section>
+                <h2 class="text-xl font-bold text-amber-400 mb-4 flex items-center gap-2">
+                    <span>🏠</span> 육묘장 구역
+                </h2>
+                <div id="grid-nursery" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- 데이터 로딩 전 표시 -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-slate-500 text-center col-span-full">데이터 로딩 중...</div>
+                </div>
+            </section>
+
+            <!-- 1동 구역 -->
+            <section>
+                <h2 class="text-xl font-bold text-sky-400 mb-4 flex items-center gap-2">
+                    <span>🏡</span> 1동 구역
+                </h2>
+                <div id="grid-dong1" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-slate-500 text-center col-span-full">데이터 로딩 중...</div>
+                </div>
+            </section>
+
+            <!-- 2동 구역 -->
+            <section>
+                <h2 class="text-xl font-bold text-indigo-400 mb-4 flex items-center gap-2">
+                    <span>🏡</span> 2동 구역
+                </h2>
+                <div id="grid-dong2" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-slate-500 text-center col-span-full">데이터 로딩 중...</div>
+                </div>
+            </section>
         </div>
     </div>
 
     <script>
-        // 스프레드시트 CSV 내보내기 링크 (gid=0 기준)
-        // 주의: 스프레드시트가 '링크가 있는 모든 사용자에게 공개(뷰어)' 상태여야 합니다.
         const SPREADSHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1TAeZh6qbw7BJSM1kYUcUG-B57I4_ccjvc4-M5afTgjU/export?format=csv&gid=0';
 
         async function fetchSheetData() {
             try {
                 const response = await fetch(SPREADSHEET_CSV_URL);
-                if (!response.ok) throw new Error('네트워크 응답이 올바르지 않습니다.');
+                if (!response.ok) throw new Error('네트워크 응답 오류');
                 const csvText = await response.text();
-                parseAndRenderCSV(csvText);
+                parseAndRender(csvText);
             } catch (error) {
-                console.error('데이터를 불러오지 못했습니다:', error);
-                document.getElementById('data-table-body').innerHTML = `
-                    <tr><td colspan="8" class="p-8 text-center text-red-400">데이터를 불러오는 중 오류가 발생했습니다. 스프레드시트 공유 권한을 확인해주세요.</td></tr>
-                `;
+                console.error('데이터 로드 실패:', error);
+                document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span> 동기화 실패`;
             }
         }
 
-        function parseAndRenderCSV(csvText) {
+        function parseAndRender(csvText) {
             const rows = csvText.split('\n').map(row => {
-                // CSV 파싱 (쉼표로 구분하되 따옴표 처리)
                 const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
                 return row.split(regex).map(val => val.replace(/^"|"$/g, '').trim());
             });
 
             if (rows.length < 2) return;
 
-            const headers = rows[0]; // A1:H1 헤더
-            const dataRows = rows.slice(1); // 실제 데이터
+            const dataRows = rows.slice(1);
             
-            const tbody = document.getElementById('data-table-body');
-            tbody.innerHTML = '';
+            const nurseryContainer = document.getElementById('grid-nursery');
+            const dong1Container = document.getElementById('grid-dong1');
+            const dong2Container = document.getElementById('grid-dong2');
 
-            let latestTime = '';
+            nurseryContainer.innerHTML = '';
+            dong1Container.innerHTML = '';
+            dong2Container.innerHTML = '';
 
-            dataRows.forEach((cols, index) => {
-                if (cols.length < 8 || !cols[0]) return; // 빈 행 무시
+            let lastTime = '';
+
+            dataRows.forEach((cols) => {
+                if (cols.length < 8 || !cols[0]) return;
 
                 const [zone, time, temp, hum, vpd, status, water, interval] = cols;
-                if (!latestTime && time) latestTime = time;
+                if (!lastTime && time) lastTime = time;
 
-                // 생육 상태에 따른 배지 스타일 설정
-                let statusBadgeClass = 'bg-slate-700 text-slate-300';
+                // 생육 상태 배지 및 카드 강조 스타일 결정
+                let badgeClass = 'bg-slate-800 text-slate-300 border-slate-700';
+                let cardBorderClass = 'border-slate-800 hover:border-slate-700';
+                
                 if (status.includes('위험') || status.includes('기공')) {
-                    statusBadgeClass = 'bg-red-500/20 text-red-400 border border-red-500/30 font-semibold';
+                    badgeClass = 'bg-red-500/20 text-red-400 border-red-500/30 font-semibold';
+                    cardBorderClass = 'border-red-500/50 bg-red-950/10 shadow-lg shadow-red-950/20';
                 } else if (status.includes('과습')) {
-                    statusBadgeClass = 'bg-blue-500/20 text-blue-400 border border-blue-500/30 font-semibold';
+                    badgeClass = 'bg-blue-500/20 text-blue-400 border-blue-500/30 font-semibold';
+                    cardBorderClass = 'border-blue-500/50 bg-blue-950/10 shadow-lg shadow-blue-950/20';
                 } else if (status.includes('보통') || status.includes('야간')) {
-                    statusBadgeClass = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                    badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                    cardBorderClass = 'border-slate-800/80 bg-slate-900/60';
                 }
 
-                const tr = document.createElement('tr');
-                tr.className = 'hover:bg-slate-800/40 transition-colors';
-                tr.innerHTML = `
-                    <td class="p-4 font-medium text-slate-200">${zone}</td>
-                    <td class="p-4 text-slate-400 text-xs">${time}</td>
-                    <td class="p-4 font-mono">${temp}</td>
-                    <td class="p-4 font-mono">${hum}</td>
-                    <td class="p-4 font-mono font-bold text-amber-300">${vpd}</td>
-                    <td class="p-4"><span class="px-2.5 py-1 rounded-full text-xs inline-block ${statusBadgeClass}">${status}</span></td>
-                    <td class="p-4 font-mono">${water}</td>
-                    <td class="p-4 font-mono">${interval}</td>
+                // 카드 HTML 구조 생성
+                const cardHtml = `
+                    <div class="bg-slate-900/80 backdrop-blur border ${cardBorderClass} rounded-2xl p-5 transition-all duration-300 flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center mb-3">
+                                <h3 class="font-bold text-slate-100 text-lg">${zone}</h3>
+                                <span class="px-2.5 py-1 rounded-full text-xs border ${badgeClass}">${status}</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 my-4 bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 text-center">
+                                <div>
+                                    <div class="text-xs text-slate-400 mb-1">온도</div>
+                                    <div class="font-mono font-semibold text-slate-200">${temp}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-400 mb-1">습도</div>
+                                    <div class="font-mono font-semibold text-slate-200">${hum}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-400 mb-1">VPD</div>
+                                    <div class="font-mono font-bold text-amber-300">${vpd}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pt-3 border-t border-slate-800/60 flex justify-between items-center text-xs text-slate-400">
+                            <div>관수량: <span class="font-mono font-medium text-slate-200">${water}</span></div>
+                            <div>인터벌: <span class="font-mono font-medium text-slate-200">${interval}</span></div>
+                        </div>
+                        <div class="text-[10px] text-slate-500 text-right mt-2">조회: ${time}</div>
+                    </div>
                 `;
-                tbody.appendChild(tr);
+
+                // 구역 이름에 따라 분류하여 해당 컨테이너에 삽입
+                if (zone.includes('육묘장')) {
+                    nurseryContainer.innerHTML += cardHtml;
+                } else if (zone.includes('1동')) {
+                    dong1Container.innerHTML += cardHtml;
+                } else if (zone.includes('2동')) {
+                    dong2Container.innerHTML += cardHtml;
+                }
             });
 
-            document.getElementById('last-update').innerText = `마지막 동기화: ${new Date().toLocaleTimeString()} (시트 기준: ${latestTime})`;
+            // 상단 동기화 상태 갱신
+            document.getElementById('sync-status').innerHTML = `
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 
+                실시간 동기화 완료 (${new Date().toLocaleTimeString()})
+            `;
         }
 
-        // 페이지 로드 시 실행 및 60초 주기 갱신
+        // 초기 실행 및 60초(1분) 주기 자동 갱신 설정
         fetchSheetData();
         setInterval(fetchSheetData, 60000);
     </script>
